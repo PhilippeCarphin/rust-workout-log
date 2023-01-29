@@ -12,19 +12,15 @@ struct WorkoutHistory {
 }
 impl WorkoutHistory {
     fn end_workout(&mut self){
-        match &self.ongoing_workout {
-            Some(w) => {
-                self.workouts.push(w.clone());
-            },
-            None => {
-                println!("ERROR: end_workout called with no ongoing workout");
-            }
+        if let Some(cw) = self.ongoing_workout.take() {
+            self.workouts.push(cw);
+        } else {
+            println!("WARNING: WorkoutHistory::end_workout called with no ongoing workout");
         }
-        self.ongoing_workout = None;
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 struct WorkoutInfo {
     date: String, // TODO Use actual datetime structure
     main_group: String,
@@ -111,19 +107,19 @@ impl WorkoutManager {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 struct ExerciseInfo {
     name: String,
     group: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 struct ExerciseSet {
     weight: f64,
     reps: u8,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Exercise {
     info: ExerciseInfo,
     sets: Vec<ExerciseSet>
