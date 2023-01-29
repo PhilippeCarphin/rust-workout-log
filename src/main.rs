@@ -10,8 +10,21 @@ struct WorkoutHistory {
     workouts: Vec<Workout>,
     ongoing_workout: Option<Workout>
 }
+impl WorkoutHistory {
+    fn end_workout(&mut self){
+        match &self.ongoing_workout {
+            Some(w) => {
+                self.workouts.push(w.clone());
+            },
+            None => {
+                println!("ERROR: end_workout called with no ongoing workout");
+            }
+        }
+        self.ongoing_workout = None;
+    }
+}
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct WorkoutInfo {
     date: String, // TODO Use actual datetime structure
     main_group: String,
@@ -35,11 +48,19 @@ impl Workout {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Workout {
     info: WorkoutInfo,
     exercises: Vec<Exercise>
 }
+// impl Workout {
+//     fn clone(&self) -> Workout {
+//         return Workout {
+//             info: WorkoutInfo { date: self.info.date.clone(), main_group: self.info.date.clone() },
+//             exercises: self.exercises.clone()
+//         };
+//     }
+// }
 
 struct WorkoutManager {
     wh: WorkoutHistory,
@@ -69,6 +90,12 @@ impl WorkoutManager {
                     "begin-exercise" => {
                         w.begin_exercise(String::from(words[1]))
                     },
+                    "end-workout" => {
+                        self.end_workout();
+                    }
+                    "begin-workout" => {
+                        println!("Not implemented: {}", command);
+                    }
                     _ => println!("Unknown command")
                 }
             },
@@ -78,22 +105,25 @@ impl WorkoutManager {
             })
         }
     }
+    fn end_workout(&mut self){
+        self.wh.end_workout();
+    }
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct ExerciseInfo {
     name: String,
     group: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct ExerciseSet {
     weight: f64,
     reps: u8,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Exercise {
     info: ExerciseInfo,
     sets: Vec<ExerciseSet>
@@ -127,13 +157,13 @@ fn generate_sample_workout_history() -> WorkoutHistory {
 /*
  * new-workout
  */
-fn repl(wh: WorkoutHistory) -> Result<()> {
+fn repl(whh: WorkoutHistory) -> Result<()> {
     let mut rl = Editor::<()>::new()?;
     if rl.load_history("history.txt").is_err() {
         println!("No history");
     }
     let mut wm = WorkoutManager {
-        wh: wh,
+        wh: whh,
     };
     loop {
         let readline = rl.readline(">> ");
@@ -158,6 +188,11 @@ fn repl(wh: WorkoutHistory) -> Result<()> {
         }
     }
     rl.save_history("history.txt")?;
+
+    let result = ::serde_json::to_writer_pretty(&File::create("replsave.json")?, &wm.wh);
+    if result.is_err() {
+        println!("Error saving to json");
+    }
 
     Ok(())
 }
