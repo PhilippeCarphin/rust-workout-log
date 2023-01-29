@@ -44,46 +44,46 @@ impl Workout {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Workout {
     info: WorkoutInfo,
     exercises: Vec<Exercise>
 }
-// impl Workout {
-//     fn clone(&self) -> Workout {
-//         return Workout {
-//             info: WorkoutInfo { date: self.info.date.clone(), main_group: self.info.date.clone() },
-//             exercises: self.exercises.clone()
-//         };
-//     }
-// }
 
 struct WorkoutManager {
     wh: WorkoutHistory,
 }
 impl WorkoutManager {
     fn handle_command(&mut self, line: String) {
+        let words : Vec<&str> = line.split_whitespace().collect();
+        if words.len() == 0 {
+            return;
+        }
+        let command = words[0];
+        let nargs = words.len() - 1;
+
         match &mut self.wh.ongoing_workout {
             Some(w) => {
-                println!("TODO Handle line");
-                println!("line = '{}'", line);
-                let words : Vec<&str> = line.split_whitespace().collect();
-                if words.len() == 0 {
-                    return;
-                }
-                let command = words[0];
-                let nargs = words.len() - 1;
+                // wh.handle_command_ongoing()
                 match command {
                     "enter-set" => {
                         if nargs < 2 {
                             println!("Not enough arguments for command '{}'", command);
                             return
                         }
+                        // COnsider using words.get(i) instead, it returns
+                        // an option with the thing if the index is in bounds
+                        // and None if out of bounds.
                         let weight = words[1].parse::<f64>().unwrap();
                         let reps = words[2].parse::<u8>().unwrap();
                         w.enter_set(weight, reps);
                     },
                     "begin-exercise" => {
+                        // Maybe have an "ongoing_exercise"
+                        if nargs < 1 {
+                            println!("ERROR: A name is required");
+                            return
+                        }
                         w.begin_exercise(String::from(words[1]))
                     },
                     "end-workout" => {
@@ -95,10 +95,19 @@ impl WorkoutManager {
                     _ => println!("Unknown command")
                 }
             },
-            None => self.wh.ongoing_workout = Some(Workout {
-                info: WorkoutInfo { date: String::from("today"), main_group: String::from("shoulders") },
-                exercises : Vec::<Exercise>::new()
-            })
+            None => {
+                match command {
+                    "begin-workout" => self.wh.ongoing_workout = Some(Workout {
+                        info: WorkoutInfo {
+                            date: String::from("today"),
+                            main_group: String::from("shoulders")
+                        },
+                        exercises : Vec::<Exercise>::new()
+                    }),
+                    _ => {println!("ERROR, no ongoing workout.  The only valid command in this context is 'begin-workout'")}
+                }
+            }
+
         }
     }
     fn end_workout(&mut self){
