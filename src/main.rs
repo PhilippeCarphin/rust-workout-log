@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 use std::fs::File;
 use rustyline::error::ReadlineError;
 use rustyline::{Editor, Result};
-use sscanf;
+// use sscanf;
 
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -15,11 +15,6 @@ struct WorkoutHistory {
 struct WorkoutInfo {
     date: String, // TODO Use actual datetime structure
     main_group: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct OngoingWorkout {
-    workout: Workout
 }
 
 impl Workout {
@@ -45,6 +40,46 @@ struct Workout {
     info: WorkoutInfo,
     exercises: Vec<Exercise>
 }
+
+struct WorkoutManager {
+    wh: WorkoutHistory,
+}
+impl WorkoutManager {
+    fn handle_command(&mut self, line: String) {
+        match &mut self.wh.ongoing_workout {
+            Some(w) => {
+                println!("TODO Handle line");
+                println!("line = '{}'", line);
+                let words : Vec<&str> = line.split_whitespace().collect();
+                if words.len() == 0 {
+                    return;
+                }
+                let command = words[0];
+                let nargs = words.len() - 1;
+                match command {
+                    "enter-set" => {
+                        if nargs < 2 {
+                            println!("Not enough arguments for command '{}'", command);
+                            return
+                        }
+                        let weight = words[1].parse::<f64>().unwrap();
+                        let reps = words[2].parse::<u8>().unwrap();
+                        w.enter_set(weight, reps);
+                    },
+                    "begin-exercise" => {
+                        w.begin_exercise(String::from(words[1]))
+                    },
+                    _ => println!("Unknown command")
+                }
+            },
+            None => self.wh.ongoing_workout = Some(Workout {
+                info: WorkoutInfo { date: String::from("today"), main_group: String::from("shoulders") },
+                exercises : Vec::<Exercise>::new()
+            })
+        }
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ExerciseInfo {
@@ -89,36 +124,24 @@ fn generate_sample_workout_history() -> WorkoutHistory {
 
     return wh;
 }
+/*
+ * new-workout
+ */
 fn repl(wh: WorkoutHistory) -> Result<()> {
     let mut rl = Editor::<()>::new()?;
     if rl.load_history("history.txt").is_err() {
         println!("No history");
     }
-    let mut workout = Workout {
-        info: WorkoutInfo { date: String::from("today"), main_group: String::from("shoulders") },
-        exercises : Vec::<Exercise>::new()
+    let mut wm = WorkoutManager {
+        wh: wh,
     };
     loop {
         let readline = rl.readline(">> ");
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
-                println!("TODO Handle line");
-                let parsed = sscanf::sscanf!(line, "{} {}", String, String);
-                let (command, args) = parsed.unwrap();
-                match command.as_str() {
-                    "enter-set" => {
-                        let parsed = sscanf::sscanf!(args, "{} {}", f64, u8);
-                        let (weight, reps) = parsed.unwrap();
-                        workout.enter_set(weight, reps);
-                    },
-                    "begin-exercise" => {
-                        let parsed = sscanf::sscanf!(args, "{}", String);
-                        let name = parsed.unwrap();
-                        workout.begin_exercise(name)
-                    },
-                    _ => println!("Unknown command")
-                }
+                wm.handle_command(line);
+                println!("Workout : {:#?}", wm.wh.ongoing_workout);
             },
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -140,7 +163,7 @@ fn repl(wh: WorkoutHistory) -> Result<()> {
 }
 
 fn main() -> std::io::Result<()> {
-    let wh = generate_sample_workout_history();
+    let mut wh = generate_sample_workout_history();
 
     let mut today = Workout {
         info: WorkoutInfo { date: String::from("today"), main_group: String::from("shoulders") },
@@ -153,7 +176,6 @@ fn main() -> std::io::Result<()> {
     today.begin_exercise(String::from("squat"));
     today.enter_set(35.0, 15);
     println!("today's workout: {:#?}", today);
-    
 
     ::serde_json::to_writer_pretty(&File::create("data.json")?, &wh)?;
     let res : WorkoutHistory = ::serde_json::from_reader(std::fs::File::open("data2.json")?)?;
