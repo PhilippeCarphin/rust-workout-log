@@ -28,7 +28,7 @@ struct WorkoutInfo {
 
 impl Workout {
     fn begin_exercise(&mut self, name: String) {
-        self.exercises.push(Exercise{ info: ExerciseInfo{ name: name, group: String::from("X")}, sets: Vec::<ExerciseSet>::new()});
+        self.exercises.push(Exercise{ info: ExerciseInfo{name, group: String::from("X")}, sets: Vec::<ExerciseSet>::new()});
     }
     fn enter_set(&mut self, weight: f64, reps: u8) {
         let result = self.exercises.last_mut();
@@ -153,13 +153,13 @@ fn generate_sample_workout_history() -> WorkoutHistory {
 /*
  * new-workout
  */
-fn repl(whh: WorkoutHistory) -> Result<()> {
+fn repl(wh: WorkoutHistory) -> Result<()> {
     let mut rl = Editor::<()>::new()?;
     if rl.load_history("history.txt").is_err() {
         println!("No history");
     }
     let mut wm = WorkoutManager {
-        wh: whh,
+        wh,
     };
     loop {
         let readline = rl.readline(">> ");
