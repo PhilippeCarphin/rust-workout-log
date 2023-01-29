@@ -1,0 +1,37 @@
+{
+  "workouts": [
+    {
+      "info": {
+        "date": "today",
+        "main_group": "shoulders"
+      },
+      "exercises": [
+        {
+          "info": {
+            "name": "overhead press",
+            "group": "shoulders"
+          },
+          "sets": [
+            {
+              "weight": 0.0,
+              "reps": 12
+            },
+            {
+              "weight": 5.0,
+              "reps": 12
+            },
+            {
+              "weight": 5.0,
+              "reps": 12
+            },
+            {
+              "weight": 5.0,
+              "reps": 12
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "ongoing_workout": null
+}

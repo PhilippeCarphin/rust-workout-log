@@ -1,0 +1,36 @@
+{
+  "workouts": [
+    {
+      "info": {
+        "date": "today",
+        "main_group": "shoulders"
+      },
+      "exercises": [
+        {
+          "info": {
+            "name": "squat",
+            "group": "legs"
+          },
+          "sets": [
+            {
+              "weight": 55.0,
+              "reps": 12
+            },
+            {
+              "weight": 55.0,
+              "reps": 12
+            },
+            {
+              "weight": 55.0,
+              "reps": 12
+            },
+            {
+              "weight": 55.0,
+              "reps": 12
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
