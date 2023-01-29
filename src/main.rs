@@ -2,6 +2,7 @@ use serde::{Serialize, Deserialize};
 use std::fs::File;
 use rustyline::error::ReadlineError;
 use rustyline::{Editor, Result};
+use dirs;
 // use sscanf;
 
 
@@ -193,8 +194,9 @@ fn repl(wh: WorkoutHistory) -> Result<()> {
         }
     }
     rl.save_history("history.txt")?;
+    println!("Workout : {:#?}", wm.wh);
 
-    let result = ::serde_json::to_writer_pretty(&File::create("replsave.json")?, &wm.wh);
+    let result = ::serde_json::to_writer_pretty(&File::create("/Users/pcarphin/.workout_data.json")?, &wm.wh);
     if result.is_err() {
         println!("Error saving to json");
     }
@@ -202,8 +204,33 @@ fn repl(wh: WorkoutHistory) -> Result<()> {
     Ok(())
 }
 
-fn main() -> std::io::Result<()> {
-    let mut wh = generate_sample_workout_history();
+fn main() {
+
+
+    if let Some(d) = dirs::home_dir() {
+        println!("User home = {:?}", d);
+        let ff = d.join(".workout_data.json");
+        if let Ok(f) = std::fs::File::open(ff) {
+            if let Ok(home_workout_data) = ::serde_json::from_reader(f) {
+                let repl_res = repl(home_workout_data);
+                if repl_res.is_err() {
+                    println!("Error in REPL");
+                }
+            }
+        }
+    } else {
+        return;
+    }
+    if false {
+        test_workout_stuff();
+    }
+
+    return;
+}
+
+fn test_workout_stuff(){
+
+    let wh = generate_sample_workout_history();
 
     let mut today = Workout {
         info: WorkoutInfo { date: String::from("today"), main_group: String::from("shoulders") },
@@ -217,12 +244,14 @@ fn main() -> std::io::Result<()> {
     today.enter_set(35.0, 15);
     println!("today's workout: {:#?}", today);
 
-    ::serde_json::to_writer_pretty(&File::create("data.json")?, &wh)?;
-    let res : WorkoutHistory = ::serde_json::from_reader(std::fs::File::open("data2.json")?)?;
-    println!("{:?}", res);
-    let repl_res = repl(wh);
-    if repl_res.is_err() {
-        println!("Error in REPL");
+    if let Ok(f) = File::create("data.json") {
+        let res = ::serde_json::to_writer_pretty(&f, &wh);
+        if res.is_err() {
+            println!("Could not save");
+        }
+    } else {
+        return;
     }
-    Ok(())
+    // let res : WorkoutHistory = ::serde_json::from_reader(std::fs::File::open("data2.json")?);
+    // println!("{:?}", res);
 }
