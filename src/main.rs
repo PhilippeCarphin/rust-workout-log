@@ -1,8 +1,9 @@
 use serde::{Serialize, Deserialize};
 use std::fs::File;
-use rustyline::error::ReadlineError;
-use rustyline::{Editor, Result};
+use rustyline;
+use rustyline::Editor;
 use dirs;
+use std::error::Error;
 // use sscanf;
 
 
@@ -11,6 +12,43 @@ struct WorkoutHistory {
     workouts: Vec<Workout>,
     ongoing_workout: Option<Workout>
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+struct WorkoutInfo {
+    date: String, // TODO Use actual datetime structure
+    main_group: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Workout {
+    info: WorkoutInfo,
+    exercises: Vec<Exercise>
+}
+
+// I don't think this struct is useful.  Its methods could probably become
+// methods of WorkoutHistory
+struct WorkoutManager {
+    wh: WorkoutHistory,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ExerciseInfo {
+    name: String,
+    group: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ExerciseSet {
+    weight: f64,
+    reps: u8,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Exercise {
+    info: ExerciseInfo,
+    sets: Vec<ExerciseSet>
+}
+
 impl WorkoutHistory {
     fn end_workout(&mut self){
         if let Some(cw) = self.ongoing_workout.take() {
@@ -21,21 +59,20 @@ impl WorkoutHistory {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct WorkoutInfo {
-    date: String, // TODO Use actual datetime structure
-    main_group: String,
-}
-
 impl Workout {
     fn begin_exercise(&mut self, name: String) {
-        self.exercises.push(Exercise{ info: ExerciseInfo{name, group: String::from("X")}, sets: Vec::<ExerciseSet>::new()});
+        self.exercises.push(
+            Exercise{
+                info: ExerciseInfo{name, group: String::from("X")},
+                sets: Vec::<ExerciseSet>::new()
+            }
+        );
     }
     fn enter_set(&mut self, weight: f64, reps: u8) {
         let result = self.exercises.last_mut();
         match result {
             Some(cur) => {
-                let set = ExerciseSet{ weight: weight, reps: reps};
+                let set = ExerciseSet{ weight, reps};
                 println!("Adding set {:?} to exercise {:?}", set, cur.info);
                 cur.sets.push(set);
             }
@@ -44,16 +81,6 @@ impl Workout {
     }
 }
 
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Workout {
-    info: WorkoutInfo,
-    exercises: Vec<Exercise>
-}
-
-struct WorkoutManager {
-    wh: WorkoutHistory,
-}
 impl WorkoutManager {
     fn handle_command(&mut self, line: String) {
         let words : Vec<&str> = line.split_whitespace().collect();
@@ -117,25 +144,6 @@ impl WorkoutManager {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
-struct ExerciseInfo {
-    name: String,
-    group: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ExerciseSet {
-    weight: f64,
-    reps: u8,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Exercise {
-    info: ExerciseInfo,
-    sets: Vec<ExerciseSet>
-}
-
-
 fn generate_sample_workout_history() -> WorkoutHistory {
     let mut wh = WorkoutHistory {
         workouts : Vec::<Workout>::new(),
@@ -163,7 +171,7 @@ fn generate_sample_workout_history() -> WorkoutHistory {
 /*
  * new-workout
  */
-fn repl(wh: WorkoutHistory) -> Result<()> {
+fn repl(wh: WorkoutHistory) -> Result<(), rustyline::error::ReadlineError> {
     let mut rl = Editor::<()>::new()?;
     if rl.load_history("history.txt").is_err() {
         println!("No history");
@@ -179,11 +187,11 @@ fn repl(wh: WorkoutHistory) -> Result<()> {
                 wm.handle_command(line);
                 println!("Workout : {:#?}", wm.wh.ongoing_workout);
             },
-            Err(ReadlineError::Interrupted) => {
+            Err(rustyline::error::ReadlineError::Interrupted) => {
                 println!("CTRL-C");
                 break
             },
-            Err(ReadlineError::Eof) => {
+            Err(rustyline::error::ReadlineError::Eof) => {
                 println!("CTRL-D");
                 break
             },
@@ -194,7 +202,12 @@ fn repl(wh: WorkoutHistory) -> Result<()> {
         }
     }
     rl.save_history("history.txt")?;
-    println!("Workout : {:#?}", wm.wh);
+    // println!("Workout : {:#?}", wm.wh);
+    match &wm.wh.ongoing_workout {
+        Some(w) => {print_workout(&w);}
+        None => {println!("No ongoing workout");}
+    }
+    print_workout_history(&wm.wh);
 
     let result = ::serde_json::to_writer_pretty(&File::create("/Users/pcarphin/.workout_data.json")?, &wm.wh);
     if result.is_err() {
@@ -204,34 +217,70 @@ fn repl(wh: WorkoutHistory) -> Result<()> {
     Ok(())
 }
 
-fn main() {
+fn print_workout(w : & Workout) {
+    println!("{} workout done on {}", w.info.main_group, w.info.date);
+    for e in &w.exercises {
+        print!("    {}: ", e.info.name);
+        for s in &e.sets {
+            print!("{}x{}; ", s.weight, s.reps);
+        }
+        print!("\n");
+    }
+}
 
+fn print_workout_history(wh: &WorkoutHistory) {
+    println!("======= Complete history =======");
+    for w in &wh.workouts {
+        print_workout(w);
+    }
+}
 
-    if let Some(d) = dirs::home_dir() {
-        println!("User home = {:?}", d);
-        let ff = d.join(".workout_data.json");
-        if let Ok(f) = std::fs::File::open(ff) {
-            if let Ok(home_workout_data) = ::serde_json::from_reader(f) {
-                let repl_res = repl(home_workout_data);
-                if repl_res.is_err() {
-                    println!("Error in REPL");
+fn get_workout_filename() -> core::result::Result<std::path::PathBuf, &'static str> {
+    if let Some(d) = dirs::home_dir(){
+        Ok(d.join(".workout_data.json"))
+    } else {
+        Err("Error")
+    }
+}
+
+fn get_workout_file() -> Result<File, &'static str> {
+    match get_workout_filename() {
+        Ok(filename) => {
+            match std::fs::File::open(filename) {
+                Ok(file) => {
+                    Ok(file)
+                },
+                Err(_e) => {
+                    return Err("Could not open workout file");
                 }
             }
+        },
+        Err(e) => {
+            Err(e)
         }
-    } else {
-        return;
     }
+}
+
+fn get_workout_data() -> Result<WorkoutHistory, Box<dyn Error>> {
+
+    let f = get_workout_file()?;
+    let d = ::serde_json::from_reader(f)?;
+    Ok(d)
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+
+    repl(get_workout_data()?)?;
+
     if false {
+        // Quell unused function warning
         test_workout_stuff();
     }
-
-    return;
+    Ok(())
 }
 
 fn test_workout_stuff(){
-
     let wh = generate_sample_workout_history();
-
     let mut today = Workout {
         info: WorkoutInfo { date: String::from("today"), main_group: String::from("shoulders") },
         exercises : Vec::<Exercise>::new()
@@ -252,6 +301,4 @@ fn test_workout_stuff(){
     } else {
         return;
     }
-    // let res : WorkoutHistory = ::serde_json::from_reader(std::fs::File::open("data2.json")?);
-    // println!("{:?}", res);
 }
