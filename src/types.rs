@@ -169,7 +169,7 @@ fn generate_sample_workout_history() -> WorkoutHistory {
 /*
  * new-workout
  */
-pub fn repl(wh: WorkoutHistory) -> Result<(), rustyline::error::ReadlineError> {
+pub fn repl(wh: WorkoutHistory) -> Result<(), Box<dyn Error>> {
     let mut rl = Editor::<()>::new()?;
     if rl.load_history("history.txt").is_err() {
         println!("No history");
@@ -206,10 +206,8 @@ pub fn repl(wh: WorkoutHistory) -> Result<(), rustyline::error::ReadlineError> {
         None => {println!("No ongoing workout");}
     }
     print_workout_history(&wm.wh);
-
-    let result = ::serde_json::to_writer_pretty(&File::create("/Users/pcarphin/.workout_data.json")?, &wm.wh);
-    if result.is_err() {
-        println!("Error saving to json");
+    if let Ok(file) = create_workout_file() {
+        ::serde_json::to_writer_pretty(file, &wm.wh)?;
     }
 
     Ok(())
@@ -237,11 +235,19 @@ fn get_workout_filename() -> core::result::Result<std::path::PathBuf, &'static s
     if let Some(d) = dirs::home_dir(){
         Ok(d.join(".workout_data.json"))
     } else {
-        Err("Error")
+        Err("Could not get home directory")
     }
 }
 
-fn get_workout_file() -> Result<File, &'static str> {
+/*
+ * std::fs::File::open(name) opens a file in read only mode and
+ * std::fs::File::create(name) opens a file in write only mode and truncates
+ * the file.  I thought of having a get_workout_file(write: bool) but
+ * then the function calls get_workout_file(true) and get_workout_file(false)
+ * look kind of silly.  Now I have these two functions that are almost
+ * identical which also looks silly but this way is clearer.
+ */
+fn open_workout_file() -> Result<File, &'static str> {
     match get_workout_filename() {
         Ok(filename) => {
             match std::fs::File::open(filename) {
@@ -259,8 +265,26 @@ fn get_workout_file() -> Result<File, &'static str> {
     }
 }
 
+fn create_workout_file() -> Result<File, &'static str> {
+    match get_workout_filename() {
+        Ok(filename) => {
+            match std::fs::File::create(filename) {
+                Ok(file) => {
+                    Ok(file)
+                },
+                Err(_e) => {
+                    return Err("Could not open workout file");
+                }
+            }
+        },
+        Err(e) => {
+            Err(e)
+        }
+    }
+}
+
 pub fn get_workout_data() -> Result<WorkoutHistory, Box<dyn Error>> {
-    let f = get_workout_file()?;
+    let f = open_workout_file()?;
     let d = ::serde_json::from_reader(f)?;
     Ok(d)
 }
