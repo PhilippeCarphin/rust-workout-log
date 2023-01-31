@@ -5,7 +5,16 @@ use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
 
-    repl(get_workout_data()?)?;
+
+    let args : Vec<String> = std::env::args().collect();
+    println!("Command arguments : '{:#?}'", args);
+    let mut wh = get_workout_data()?;
+    if args.len() == 1 {
+        repl(wh)?;
+    } else {
+        wh.handle_command(&args[1..]);
+    }
+
 
     if false {
         // Quell unused function warning
