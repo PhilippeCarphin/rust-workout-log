@@ -112,63 +112,76 @@ impl WorkoutHistory {
         let command = &argv[0];
         let nargs = argv.len() - 1;
 
-        match &mut self.ongoing_workout {
-            Some(w) => {
-                // wh.handle_command_ongoing()
-                match command.as_str() {
-                    "streak" =>{
-                        self.streak();
-                    },
-                    "enter-set" => {
-                        if nargs < 2 {
-                            println!("Not enough arguments for command '{}'", command);
-                            return
-                        }
-                        // COnsider using words.get(i) instead, it returns
-                        // an option with the thing if the index is in bounds
-                        // and None if out of bounds.
-                        let weight = argv[1].parse::<f64>().unwrap();
-                        let reps = argv[2].parse::<u8>().unwrap();
-                        w.enter_set(weight, reps);
-                    },
-                    "begin-exercise" => {
-                        // Maybe have an "ongoing_exercise"
-                        if nargs < 1 {
-                            println!("ERROR: A name is required");
-                            return
-                        }
-                        w.begin_exercise(String::from(&argv[1]))
-                    },
-                    "end-workout" => {
-                        self.end_workout();
-                    }
-                    "begin-workout" => {
-                        println!("{}: ERROR: There is already an ongoing workout.  Maybe run 'end-workout'", command);
-                    }
-                    _ => println!("Unknown command")
-                }
+        // TODO: This nesting is getting absolutely nuts, I have to fix it
+        // somehow.
+        match command.as_str() {
+            "streak" =>{
+                self.streak();
+                return;
             },
-            None => {
-                match command.as_str() {
-                    "begin-workout" => {
-                        if nargs < 1 {
-                            println!("ERROR: Command {} requires a muscle group as an argument", command);
-                            return
+            "streak-status" => {
+                println!("NOT IMPLEMENTED: {}", command)
+            }
+            _ => match &mut self.ongoing_workout {
+                Some(w) => {
+                    // wh.handle_command_ongoing()
+                    match command.as_str() {
+                        "enter-set" => {
+                            if nargs < 2 {
+                                println!("Not enough arguments for command '{}'", command);
+                                return
+                            }
+                            // COnsider using words.get(i) instead, it returns
+                            // an option with the thing if the index is in bounds
+                            // and None if out of bounds.
+                            let weight = argv[1].parse::<f64>().unwrap();
+                            let reps = argv[2].parse::<u8>().unwrap();
+                            w.enter_set(weight, reps);
+                        },
+                        "begin-exercise" => {
+                            // Maybe have an "ongoing_exercise"
+                            if nargs < 1 {
+                                println!("ERROR: A name is required");
+                                return
+                            }
+                            w.begin_exercise(String::from(&argv[1]))
+                        },
+                        "end-workout" => {
+                            self.end_workout();
                         }
-                        let d = chrono::Local::now();
-                        self.ongoing_workout = Some(Workout {
-                            info: WorkoutInfo {
-                                date: d,
-                                main_group: String::from(&argv[1])
-                            },
-                            exercises : Vec::<Exercise>::new()
-                        })
-                    },
-                    _ => {println!("ERROR, no ongoing workout.  The only valid command in this context is 'begin-workout'")}
+                        "begin-workout" => {
+                            println!("{}: ERROR: There is already an ongoing workout.  Maybe run 'end-workout'", command);
+                        }
+                        _ => println!("Unknown command")
+                    }
+                },
+                None => {
+                    match command.as_str() {
+                        "begin-workout" => {
+                            if nargs < 1 {
+                                println!("ERROR: Command {} requires a muscle group as an argument", command);
+                                return
+                            }
+                            let d = chrono::Local::now();
+                            self.ongoing_workout = Some(Workout {
+                                info: WorkoutInfo {
+                                    date: d,
+                                    main_group: String::from(&argv[1])
+                                },
+                                exercises : Vec::<Exercise>::new()
+                            })
+                        },
+                        _ => {println!("ERROR, no ongoing workout.  The only valid command in this context is 'begin-workout'")}
+                    }
                 }
             }
-
         }
+    }
+    pub fn save(&self) -> Result<(),Box<dyn Error>> {
+        if let Ok(file) = create_workout_file() {
+            ::serde_json::to_writer_pretty(file, self)?;
+        }
+        Ok(())
     }
 }
 
@@ -198,7 +211,7 @@ fn generate_sample_workout_history() -> WorkoutHistory {
     return wh;
 }
 
-pub fn repl(mut wh: WorkoutHistory) -> Result<(), Box<dyn Error>> {
+pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
     let mut rl = Editor::<()>::new()?;
     if rl.load_history("history.txt").is_err() {
         println!("No history");
@@ -227,14 +240,7 @@ pub fn repl(mut wh: WorkoutHistory) -> Result<(), Box<dyn Error>> {
     }
     rl.save_history("history.txt")?;
     // println!("Workout : {:#?}", wh);
-    match &wh.ongoing_workout {
-        Some(w) => {print_workout(&w);}
-        None => {println!("No ongoing workout");}
-    }
     print_workout_history(&wh);
-    if let Ok(file) = create_workout_file() {
-        ::serde_json::to_writer_pretty(file, &wh)?;
-    }
 
     Ok(())
 }
@@ -251,6 +257,13 @@ pub fn print_workout(w : & Workout) {
 }
 
 pub fn print_workout_history(wh: &WorkoutHistory) {
+    match &wh.ongoing_workout {
+        Some(w) => {
+            println!("======= Ongoing workout =======");
+            print_workout(&w);
+        }
+        None => {println!("No ongoing workout");}
+    }
     println!("======= Complete history =======");
     for w in &wh.workouts {
         print_workout(w);
