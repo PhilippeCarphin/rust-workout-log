@@ -1,0 +1,93 @@
+{
+  "workouts": [
+    {
+      "info": {
+        "date": "2023-01-26T17:13:26.685238-05:00",
+        "main_group": "legs"
+      },
+      "exercises": [
+        {
+          "info": {
+            "name": "squats",
+            "group": "legs"
+          },
+          "sets": [
+            {
+              "weight": 100.0,
+              "reps": 10
+            },
+            {
+              "weight": 100.0,
+              "reps": 10
+            },
+            {
+              "weight": 100.0,
+              "reps": 10
+            },
+            {
+              "weight": 100.0,
+              "reps": 10
+            }
+          ]
+        },
+        {
+          "info": {
+            "name": "lunge",
+            "group": "legs"
+          },
+          "sets": [
+            {
+              "weight": 30.0,
+              "reps": 10
+            },
+            {
+              "weight": 30.0,
+              "reps": 10
+            },
+            {
+              "weight": 30.0,
+              "reps": 10
+            },
+            {
+              "weight": 30.0,
+              "reps": 10
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "info": {
+        "date": "2023-01-29T16:13:26.685238-05:00",
+        "main_group": "chest"
+      },
+      "exercises": [
+        {
+          "info": {
+            "name": "bench_press",
+            "group": "chest"
+          },
+          "sets": [
+            {
+              "weight": 25.0,
+              "reps": 10
+            },
+            {
+              "weight": 25.0,
+              "reps": 10
+            },
+            {
+              "weight": 25.0,
+              "reps": 10
+            },
+            {
+              "weight": 25.0,
+              "reps": 10
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "ongoing_workout": null
+}

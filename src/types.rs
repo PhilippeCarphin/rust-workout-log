@@ -271,11 +271,14 @@ pub fn print_workout_history(wh: &WorkoutHistory) {
 }
 
 fn get_workout_filename() -> core::result::Result<std::path::PathBuf, &'static str> {
-    if let Some(d) = dirs::home_dir(){
-        Ok(d.join(".workout_data.json"))
-    } else {
-        Err("Could not get home directory")
-    }
+    let mut path = std::path::PathBuf::new();
+    path.push("workout_data.json");
+    return Ok(path);
+    // if let Some(d) = dirs::home_dir(){
+    //     Ok(d.join(".workout_data.json"))
+    // } else {
+    //     Err("Could not get home directory")
+    // }
 }
 
 /*
