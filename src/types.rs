@@ -10,7 +10,14 @@ use shell_words;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WorkoutHistory {
     workouts: Vec<Workout>,
-    ongoing_workout: Option<Workout>
+    ongoing_workout: Option<Workout>,
+    #[serde(default = "WorkoutHistory::default_value")]
+    missing: String
+}
+impl WorkoutHistory {
+    fn default_value() -> String {
+        "DEFAULT VALUE".to_string()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -43,6 +50,47 @@ pub struct Exercise {
     info: ExerciseInfo,
     sets: Vec<ExerciseSet>
 }
+// pub fn streak_date_1(dt: chrono::Local)  {
+//     let d = dt.date_naive();
+//     println!("Date {:?} becomes naive date {:?}", dt,d);
+// 
+// }
+
+pub fn cutoff_time() -> Result<chrono::NaiveTime, &'static str> {
+    chrono::NaiveTime::from_hms_opt(3,3,3)
+        .ok_or("Could not create cutoff time")
+}
+
+pub fn streak_date(dt: chrono::DateTime<chrono::Local>) -> Result<chrono::NaiveDate, &'static str> {
+    if dt.time() < cutoff_time()? {
+        if let Some(yesterday) = dt.date_naive().checked_sub_days(chrono::Days::new(1)) {
+            Ok(yesterday)
+        } else {
+            Err("Could not subtract one day when computing streak date")
+        }
+    } else {
+        Ok(dt.date_naive())
+    }
+}
+
+pub fn streak_start_date_test() -> Result<chrono::NaiveDate, &'static str> {
+    let streak_today = streak_date(chrono::Local::now())?;
+    if let Some(streak_tomorrow) = streak_today.checked_add_days(chrono::Days::new(1)) {
+        Ok(streak_tomorrow)
+    } else {
+        Err("Could not subtract one day from today")
+    }
+// streak_start_date()?;
+}
+
+pub fn streak_start_date() -> Result<chrono::NaiveDate, &'static str>{
+    let streak_today = streak_date(chrono::Local::now())?;
+    if let Some(streak_tomorrow) = streak_today.checked_add_days(chrono::Days::new(1)) {
+        Ok(streak_tomorrow)
+    } else {
+        Err("Could not subtract one day from today")
+    }
+}
 
 impl WorkoutHistory {
     fn end_workout(&mut self){
@@ -52,33 +100,32 @@ impl WorkoutHistory {
             println!("WARNING: WorkoutHistory::end_workout called with no ongoing workout");
         }
     }
-    fn streak(&self) -> i32 {
-        let mut n = 0;
-        let mut prev : Option<&Workout> = None;
+    pub fn streak(&self, start_date: chrono::NaiveDate) -> Result<i32, Box<dyn Error>> {
+        let mut n : i32 = 0;
+        // We are going backwards, so previous is like tomorrow
+        let mut prev = start_date;
         for w in self.workouts.iter().rev() {
-            // TODO: Start streak analysis with current date
-            // TODO: 
-            match prev {
-                Some(wp) => {
-                    let dp = wp.info.date;
-                    let d = w.info.date;
-                    println!("Streak analysis: prev = {}, cur = {}", dp, d);
-                    let diff = dp.signed_duration_since(d);
-                    println!("signed duration: {}, num_days: {}, num_hours: {}", diff, diff.num_days(), diff.num_hours());
-                    if diff.num_days() <= 1 {
-                        n += 1;
-                    } else {
-                        break;
-                    }
-                }
-                None => {
-                    println!("First iteration, no previous workout");
+            let cur = streak_date(w.info.date)?;
+            let diff = prev.signed_duration_since(cur);
+            match diff.num_days() {
+                i64::MIN..=-1 => {
+                    // println!("ERROR: Workouts out of order in database");
+                    return Err("Workouts are out of order, cannot reliably calculate streak".into());
+                },
+                0 => {
+                    continue;
+                },
+                1 => {
+                    n += 1;
+                },
+                2..=i64::MAX => {
+                    // println!("Streak ends at {} since the previous workout is on {}", prev, cur);
+                    return Ok(n);
                 }
             }
-            prev = Some(&w);
+            prev = cur;
         }
-        println!("The current streak is {n}");
-        return n;
+        Ok(n)
     }
 }
 
@@ -105,9 +152,9 @@ impl Workout {
 }
 
 impl WorkoutHistory {
-    pub fn handle_command(&mut self, argv: &[String]) {
+    pub fn handle_command(&mut self, argv: &[String]) -> Result<(), Box<dyn Error>>{
         if argv.len() == 0 {
-            return;
+            return Err("Function requires at least a command".into());
         }
         let command = &argv[0];
         let nargs = argv.len() - 1;
@@ -116,33 +163,37 @@ impl WorkoutHistory {
         // somehow.
         match command.as_str() {
             "streak" =>{
-                self.streak();
-                return;
+                if let Ok(n) = self.streak(streak_start_date()?) {
+                    println!("Streak is {}", n);
+                }
+                return Ok(());
             },
             "streak-status" => {
                 println!("NOT IMPLEMENTED: {}", command)
-            }
+            },
+            "enter-set" => {
+                if let Some(w) = &mut self.ongoing_workout {
+                    if nargs < 2 {
+                        return Err(format!("Not enough arguments for command {}", command).into());
+                    }
+                    // COnsider using words.get(i) instead, it returns
+                    // an option with the thing if the index is in bounds
+                    // and None if out of bounds.
+                    let weight = argv[1].parse::<f64>().unwrap();
+                    let reps = argv[2].parse::<u8>().unwrap();
+                    w.enter_set(weight, reps);
+                } else {
+                    println!("ERROR, command '{}' requires an ongoing workout", command);
+                }
+            },
             _ => match &mut self.ongoing_workout {
                 Some(w) => {
                     // wh.handle_command_ongoing()
                     match command.as_str() {
-                        "enter-set" => {
-                            if nargs < 2 {
-                                println!("Not enough arguments for command '{}'", command);
-                                return
-                            }
-                            // COnsider using words.get(i) instead, it returns
-                            // an option with the thing if the index is in bounds
-                            // and None if out of bounds.
-                            let weight = argv[1].parse::<f64>().unwrap();
-                            let reps = argv[2].parse::<u8>().unwrap();
-                            w.enter_set(weight, reps);
-                        },
                         "begin-exercise" => {
                             // Maybe have an "ongoing_exercise"
                             if nargs < 1 {
-                                println!("ERROR: A name is required");
-                                return
+                                return Err("A name is required".into());
                             }
                             w.begin_exercise(String::from(&argv[1]))
                         },
@@ -150,17 +201,18 @@ impl WorkoutHistory {
                             self.end_workout();
                         }
                         "begin-workout" => {
-                            println!("{}: ERROR: There is already an ongoing workout.  Maybe run 'end-workout'", command);
+                            return Err(format!("{}: There is already an ongoing workout.  Maybe run 'end-workout'", command).into());
                         }
-                        _ => println!("Unknown command")
+                        _ => {
+                            return Err(format!("Unknown command {}", command).into());
+                        }
                     }
                 },
                 None => {
                     match command.as_str() {
                         "begin-workout" => {
                             if nargs < 1 {
-                                println!("ERROR: Command {} requires a muscle group as an argument", command);
-                                return
+                                return Err(format!("Command {} requires a muscle group as an argument", command).into());
                             }
                             let d = chrono::Local::now();
                             self.ongoing_workout = Some(Workout {
@@ -171,11 +223,14 @@ impl WorkoutHistory {
                                 exercises : Vec::<Exercise>::new()
                             })
                         },
-                        _ => {println!("ERROR, no ongoing workout.  The only valid command in this context is 'begin-workout'")}
+                        _ => {
+                            return Err(format!("no ongoing workout.  The only valid command in this context is 'begin-workout'").into());
+                        }
                     }
                 }
             }
         }
+        Ok(())
     }
     pub fn save(&self) -> Result<(),Box<dyn Error>> {
         if let Ok(file) = create_workout_file() {
@@ -189,7 +244,8 @@ impl WorkoutHistory {
 fn generate_sample_workout_history() -> WorkoutHistory {
     let mut wh = WorkoutHistory {
         workouts : Vec::<Workout>::new(),
-        ongoing_workout: None
+        ongoing_workout: None,
+        missing: "MISSING VALUE".to_string()
     };
     let mut today = Workout {
         info: WorkoutInfo { date: chrono::Local::now(), main_group: String::from("shoulders") },
@@ -216,14 +272,22 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
     if rl.load_history("history.txt").is_err() {
         println!("No history");
     }
+    // TODO: Set beginning prompt based on workout history
+    // Ongoing workout or not, current exercise, set number?
     loop {
         let readline = rl.readline(">> ");
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
                 let argv = shell_words::split(line.as_str())?;
-                wh.handle_command(&argv);
-                println!("Workout : {:#?}", wh.ongoing_workout);
+                if let Err(e) = wh.handle_command(&argv) {
+                    println!("\x1b[1;31mERROR\x1b[0m: {}", e);
+                }
+                if let Some(ow) = &wh.ongoing_workout {
+                    print_workout(ow);
+                } else {
+                    print_workout_history(&wh);
+                }
             },
             Err(rustyline::error::ReadlineError::Interrupted) => {
                 println!("^C");
@@ -239,7 +303,6 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
         }
     }
     rl.save_history("history.txt")?;
-    // println!("Workout : {:#?}", wh);
     print_workout_history(&wh);
 
     Ok(())
@@ -271,14 +334,15 @@ pub fn print_workout_history(wh: &WorkoutHistory) {
 }
 
 fn get_workout_filename() -> core::result::Result<std::path::PathBuf, &'static str> {
-    let mut path = std::path::PathBuf::new();
-    path.push("workout_data.json");
-    return Ok(path);
-    // if let Some(d) = dirs::home_dir(){
-    //     Ok(d.join(".workout_data.json"))
-    // } else {
-    //     Err("Could not get home directory")
-    // }
+    if true {
+        return Ok(std::path::PathBuf::from("workout_data.json"));
+    } else {
+        if let Some(d) = dirs::home_dir(){
+            Ok(d.join(".workout_data.json"))
+        } else {
+            Err("Could not get home directory")
+        }
+    }
 }
 
 /*
