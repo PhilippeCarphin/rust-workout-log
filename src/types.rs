@@ -56,40 +56,28 @@ pub struct Exercise {
 // 
 // }
 
-pub fn cutoff_time() -> Result<chrono::NaiveTime, &'static str> {
-    chrono::NaiveTime::from_hms_opt(3,3,3)
-        .ok_or("Could not create cutoff time")
+pub fn cutoff_time() -> Result<chrono::NaiveTime, Box<dyn Error>> {
+    return chrono::NaiveTime::from_hms_opt(3,3,3)
+        .ok_or("Could not create cutoff time".into())
 }
 
-pub fn streak_date(dt: chrono::DateTime<chrono::Local>) -> Result<chrono::NaiveDate, &'static str> {
+/*
+ * A workout done on Tuesday before 3:30 AM counts as a workout done
+ * Monday for the purposes of streak computations.
+ */
+pub fn streak_date(dt: chrono::DateTime<chrono::Local>) -> Result<chrono::NaiveDate, Box<dyn Error>> {
     if dt.time() < cutoff_time()? {
-        if let Some(yesterday) = dt.date_naive().checked_sub_days(chrono::Days::new(1)) {
-            Ok(yesterday)
-        } else {
-            Err("Could not subtract one day when computing streak date")
-        }
+        return dt.date_naive().checked_sub_days(chrono::Days::new(1))
+            .ok_or("Could not subtract one day when computing streak date".into())
     } else {
         Ok(dt.date_naive())
     }
 }
 
-pub fn streak_start_date_test() -> Result<chrono::NaiveDate, &'static str> {
-    let streak_today = streak_date(chrono::Local::now())?;
-    if let Some(streak_tomorrow) = streak_today.checked_add_days(chrono::Days::new(1)) {
-        Ok(streak_tomorrow)
-    } else {
-        Err("Could not subtract one day from today")
-    }
-// streak_start_date()?;
-}
-
-pub fn streak_start_date() -> Result<chrono::NaiveDate, &'static str>{
-    let streak_today = streak_date(chrono::Local::now())?;
-    if let Some(streak_tomorrow) = streak_today.checked_add_days(chrono::Days::new(1)) {
-        Ok(streak_tomorrow)
-    } else {
-        Err("Could not subtract one day from today")
-    }
+pub fn tomorrow() -> Result<chrono::NaiveDate, Box<dyn Error>>{
+    return streak_date(chrono::Local::now())?
+        .checked_add_days(chrono::Days::new(1))
+        .ok_or("Could not subtract one day from today".into());
 }
 
 impl WorkoutHistory {
@@ -100,10 +88,10 @@ impl WorkoutHistory {
             println!("WARNING: WorkoutHistory::end_workout called with no ongoing workout");
         }
     }
-    pub fn streak(&self, start_date: chrono::NaiveDate) -> Result<i32, Box<dyn Error>> {
+    pub fn streak(&self, start_date: Option<chrono::NaiveDate>) -> Result<i32, Box<dyn Error>> {
         let mut n : i32 = 0;
-        // We are going backwards, so previous is like tomorrow
-        let mut prev = start_date;
+
+        let mut prev = start_date.unwrap_or(tomorrow()?);
         for w in self.workouts.iter().rev() {
             let cur = streak_date(w.info.date)?;
             let diff = prev.signed_duration_since(cur);
@@ -152,7 +140,7 @@ impl Workout {
 }
 
 impl WorkoutHistory {
-    pub fn handle_command(&mut self, argv: &[String]) -> Result<(), Box<dyn Error>>{
+    pub fn handle_command(&mut self, argv: &[String]) -> Result<String, Box<dyn Error>>{
         if argv.len() == 0 {
             return Err("Function requires at least a command".into());
         }
@@ -163,10 +151,10 @@ impl WorkoutHistory {
         // somehow.
         match command.as_str() {
             "streak" =>{
-                if let Ok(n) = self.streak(streak_start_date()?) {
-                    println!("Streak is {}", n);
+                return match self.streak(None) {
+                    Ok(n) => Ok(format!("Streak is {}", n)),
+                    Err(e) => Err(e)
                 }
-                return Ok(());
             },
             "streak-status" => {
                 println!("NOT IMPLEMENTED: {}", command)
@@ -176,12 +164,8 @@ impl WorkoutHistory {
                     if nargs < 2 {
                         return Err(format!("Not enough arguments for command {}", command).into());
                     }
-                    // COnsider using words.get(i) instead, it returns
-                    // an option with the thing if the index is in bounds
-                    // and None if out of bounds.
-                    let weight = argv[1].parse::<f64>().unwrap();
-                    let reps = argv[2].parse::<u8>().unwrap();
-                    w.enter_set(weight, reps);
+                    // TODO: Get rid of this shameful index access
+                    w.enter_set(argv[1].parse::<f64>()?, argv[2].parse::<u8>()?);
                 } else {
                     println!("ERROR, command '{}' requires an ongoing workout", command);
                 }
@@ -230,7 +214,7 @@ impl WorkoutHistory {
                 }
             }
         }
-        Ok(())
+        Ok("Done".into())
     }
     pub fn save(&self) -> Result<(),Box<dyn Error>> {
         if let Ok(file) = create_workout_file() {
@@ -278,10 +262,17 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
         let readline = rl.readline(">> ");
         match readline {
             Ok(line) => {
+                if line == "" {
+                    continue;
+                }
                 rl.add_history_entry(line.as_str());
                 let argv = shell_words::split(line.as_str())?;
                 if let Err(e) = wh.handle_command(&argv) {
                     println!("\x1b[1;31mERROR\x1b[0m: {}", e);
+                }
+                rl.save_history("history.txt")?;
+                if wh.save().is_err() {
+                    println!("\x1b[1;31ERROR\x1b[0m Failed to save file");
                 }
                 if let Some(ow) = &wh.ongoing_workout {
                     print_workout(ow);
@@ -302,7 +293,6 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
             }
         }
     }
-    rl.save_history("history.txt")?;
     print_workout_history(&wh);
 
     Ok(())
@@ -333,14 +323,15 @@ pub fn print_workout_history(wh: &WorkoutHistory) {
     }
 }
 
-fn get_workout_filename() -> core::result::Result<std::path::PathBuf, &'static str> {
-    if true {
+fn get_workout_filename() -> core::result::Result<std::path::PathBuf, Box<dyn Error>> {
+    let testing = std::env::var("RUST_WORKOUT_LOG_TESTING").is_ok();
+    if testing {
         return Ok(std::path::PathBuf::from("workout_data.json"));
     } else {
         if let Some(d) = dirs::home_dir(){
             Ok(d.join(".workout_data.json"))
         } else {
-            Err("Could not get home directory")
+            Err("Could not get home directory".into())
         }
     }
 }
@@ -353,7 +344,7 @@ fn get_workout_filename() -> core::result::Result<std::path::PathBuf, &'static s
  * look kind of silly.  Now I have these two functions that are almost
  * identical which also looks silly but this way is clearer.
  */
-fn open_workout_file() -> Result<File, &'static str> {
+fn open_workout_file() -> Result<File, Box<dyn Error>> {
     match get_workout_filename() {
         Ok(filename) => {
             match std::fs::File::open(filename) {
@@ -361,7 +352,7 @@ fn open_workout_file() -> Result<File, &'static str> {
                     Ok(file)
                 },
                 Err(_e) => {
-                    return Err("Could not open workout file");
+                    return Err("Could not open workout file".into());
                 }
             }
         },
@@ -371,7 +362,7 @@ fn open_workout_file() -> Result<File, &'static str> {
     }
 }
 
-fn create_workout_file() -> Result<File, &'static str> {
+fn create_workout_file() -> Result<File, Box<dyn Error>> {
     match get_workout_filename() {
         Ok(filename) => {
             match std::fs::File::create(filename) {
@@ -379,7 +370,7 @@ fn create_workout_file() -> Result<File, &'static str> {
                     Ok(file)
                 },
                 Err(_e) => {
-                    return Err("Could not open workout file");
+                    return Err("Could not open workout file".into());
                 }
             }
         },
