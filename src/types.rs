@@ -81,11 +81,12 @@ pub fn tomorrow() -> Result<chrono::NaiveDate, Box<dyn Error>>{
 }
 
 impl WorkoutHistory {
-    fn end_workout(&mut self){
+    fn end_workout(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(cw) = self.ongoing_workout.take() {
             self.workouts.push(cw);
+            Ok(())
         } else {
-            println!("WARNING: WorkoutHistory::end_workout called with no ongoing workout");
+            Err("No ongoing workout".into())
         }
     }
     pub fn streak(&self, start_date: Option<chrono::NaiveDate>) -> Result<i32, Box<dyn Error>> {
@@ -115,26 +116,83 @@ impl WorkoutHistory {
         }
         Ok(n)
     }
+    fn begin_workout(&mut self, main_group: String) -> Result<(), Box<dyn Error>> {
+        let d = chrono::Local::now();
+        self.ongoing_workout = Some(Workout {
+            info: WorkoutInfo {
+                date: d,
+                main_group
+            },
+            exercises : Vec::<Exercise>::new()
+        });
+        Ok(())
+    }
+
+    fn enter_set_command(&mut self, argv: &[String] ) -> Result<String, Box<dyn Error>> {
+        if let Some(w) = &mut self.ongoing_workout {
+            if argv.len() < 2 {
+                return Err("Not enough arguments".into());
+            }
+            // TODO: Get rid of this shameful index access
+            w.enter_set(argv[1].parse::<f64>()?, argv[2].parse::<u8>()?)?;
+            Ok("Set added".into())
+        } else {
+            Err("No ongoing workout".into())
+        }
+    }
+    fn begin_exercise_command(&mut self, argv: &[String]) -> Result<String, Box<dyn Error>> {
+        return match &mut self.ongoing_workout {
+            Some(w) => {
+                if argv.len() < 1 {
+                    Err("A name is required".into())
+                } else {
+                    w.begin_exercise(String::from(&argv[1]))
+                }
+            },
+            None => {
+                Err("No ongoing workout".into())
+            }
+        }
+    }
+    fn end_workout_command(&mut self, _argv: &[String]) -> Result<String, Box<dyn Error>> {
+        self.end_workout()?;
+        Ok("Workout ended".into())
+    }
+
+    fn begin_workout_command(&mut self, argv: &[String]) -> Result<String, Box<dyn Error>> {
+        if argv.len() < 1 {
+            return Err("Missing muscle group argument".into());
+        }
+        self.begin_workout(argv[1].to_string())?;
+        return Ok("Workout started".into())
+    }
+    fn streak_command(&self, _argv: &[String]) -> Result<String, Box<dyn Error>> {
+        match self.streak(None) {
+            Ok(n) => Ok(format!("Streak is {}", n)),
+            Err(e) => Err(e)
+        }
+    }
 }
 
 impl Workout {
-    fn begin_exercise(&mut self, name: String) {
+    fn begin_exercise(&mut self, name: String) -> Result<String, Box<dyn Error>> {
         self.exercises.push(
             Exercise{
                 info: ExerciseInfo{name, group: String::from("X")},
                 sets: Vec::<ExerciseSet>::new()
             }
         );
+        return Ok("Exercise started".to_string())
     }
-    fn enter_set(&mut self, weight: f64, reps: u8) {
+    fn enter_set(&mut self, weight: f64, reps: u8) -> Result<(), Box<dyn Error>> {
         let result = self.exercises.last_mut();
         match result {
             Some(cur) => {
                 let set = ExerciseSet{ weight, reps};
-                println!("Adding set {:?} to exercise {:?}", set, cur.info);
                 cur.sets.push(set);
+                Ok(())
             }
-            None => println!("No current exercise")
+            None => Err("No current exercise".into())
         }
     }
 }
@@ -145,76 +203,22 @@ impl WorkoutHistory {
             return Err("Function requires at least a command".into());
         }
         let command = &argv[0];
-        let nargs = argv.len() - 1;
 
-        // TODO: This nesting is getting absolutely nuts, I have to fix it
-        // somehow.
-        match command.as_str() {
-            "streak" =>{
-                return match self.streak(None) {
-                    Ok(n) => Ok(format!("Streak is {}", n)),
-                    Err(e) => Err(e)
-                }
-            },
-            "streak-status" => {
-                println!("NOT IMPLEMENTED: {}", command)
-            },
-            "enter-set" => {
-                if let Some(w) = &mut self.ongoing_workout {
-                    if nargs < 2 {
-                        return Err(format!("Not enough arguments for command {}", command).into());
-                    }
-                    // TODO: Get rid of this shameful index access
-                    w.enter_set(argv[1].parse::<f64>()?, argv[2].parse::<u8>()?);
-                } else {
-                    println!("ERROR, command '{}' requires an ongoing workout", command);
-                }
-            },
-            _ => match &mut self.ongoing_workout {
-                Some(w) => {
-                    // wh.handle_command_ongoing()
-                    match command.as_str() {
-                        "begin-exercise" => {
-                            // Maybe have an "ongoing_exercise"
-                            if nargs < 1 {
-                                return Err("A name is required".into());
-                            }
-                            w.begin_exercise(String::from(&argv[1]))
-                        },
-                        "end-workout" => {
-                            self.end_workout();
-                        }
-                        "begin-workout" => {
-                            return Err(format!("{}: There is already an ongoing workout.  Maybe run 'end-workout'", command).into());
-                        }
-                        _ => {
-                            return Err(format!("Unknown command {}", command).into());
-                        }
-                    }
-                },
-                None => {
-                    match command.as_str() {
-                        "begin-workout" => {
-                            if nargs < 1 {
-                                return Err(format!("Command {} requires a muscle group as an argument", command).into());
-                            }
-                            let d = chrono::Local::now();
-                            self.ongoing_workout = Some(Workout {
-                                info: WorkoutInfo {
-                                    date: d,
-                                    main_group: String::from(&argv[1])
-                                },
-                                exercises : Vec::<Exercise>::new()
-                            })
-                        },
-                        _ => {
-                            return Err(format!("no ongoing workout.  The only valid command in this context is 'begin-workout'").into());
-                        }
-                    }
-                }
-            }
+        let res = match command.as_str() {
+            "streak" => self.streak_command(argv),
+            "streak-status" => Err(format!("{}: NOT IMPLEMENTED",command).into()),
+            "enter-set" => self.enter_set_command(argv),
+            "begin-exericse" => self.begin_exercise_command(argv),
+            "end-workout" => self.end_workout_command(argv),
+            "begin-workout" => self.begin_workout_command(argv),
+            _ => return Err(format!("{}: no such command", command).into())
+        };
+
+        if let Err(e) = res {
+            return Err(format!("{}: {}", command, e).into())
+        } else {
+            return res
         }
-        Ok("Done".into())
     }
     pub fn save(&self) -> Result<(),Box<dyn Error>> {
         if let Ok(file) = create_workout_file() {
@@ -386,26 +390,21 @@ pub fn get_workout_data() -> Result<WorkoutHistory, Box<dyn Error>> {
     Ok(d)
 }
 
-pub fn test_workout_stuff(){
+pub fn test_workout_stuff() -> Result<(),Box<dyn Error>>{
     let wh = generate_sample_workout_history();
     let mut today = Workout {
         info: WorkoutInfo { date: chrono::Local::now(), main_group: String::from("shoulders") },
         exercises : Vec::<Exercise>::new()
     };
 
-    today.begin_exercise(String::from("bench_press"));
-    today.enter_set(10.0, 12);
-    today.enter_set(15.0, 12);
-    today.begin_exercise(String::from("squat"));
-    today.enter_set(35.0, 15);
+    today.begin_exercise(String::from("bench_press"))?;
+    today.enter_set(10.0, 12)?;
+    today.enter_set(15.0, 12)?;
+    today.begin_exercise(String::from("squat"))?;
+    today.enter_set(35.0, 15)?;
     println!("today's workout: {:#?}", today);
 
-    if let Ok(f) = File::create("data.json") {
-        let res = ::serde_json::to_writer_pretty(&f, &wh);
-        if res.is_err() {
-            println!("Could not save");
-        }
-    } else {
-        return;
-    }
+    let f = File::create("data.json")?;
+    ::serde_json::to_writer_pretty(&f, &wh)?;
+    Ok(())
 }
