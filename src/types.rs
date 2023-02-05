@@ -6,6 +6,7 @@ use rustyline::Editor;
 use dirs;
 use std::error::Error;
 use shell_words;
+use sscanf;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WorkoutHistory {
@@ -121,7 +122,13 @@ impl WorkoutHistory {
                 return Err("Not enough arguments".into());
             }
             // TODO: Get rid of this shameful index access
-            w.enter_set(argv[0].parse::<f64>()?, argv[1].parse::<u8>()?)?;
+            let weight = if argv[0].ends_with("kg") {
+                let pounds_per_kg = 2.20;
+                sscanf::sscanf!(argv[0], "{}kg", f64)? * pounds_per_kg
+            } else {
+                argv[0].parse::<f64>()?
+            };
+            w.enter_set(weight, argv[1].parse::<u8>()?)?;
             Ok("Set added".into())
         } else {
             Err("No ongoing workout".into())
