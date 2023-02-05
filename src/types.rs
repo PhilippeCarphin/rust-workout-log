@@ -134,7 +134,7 @@ impl WorkoutHistory {
                 return Err("Not enough arguments".into());
             }
             // TODO: Get rid of this shameful index access
-            w.enter_set(argv[1].parse::<f64>()?, argv[2].parse::<u8>()?)?;
+            w.enter_set(argv[0].parse::<f64>()?, argv[1].parse::<u8>()?)?;
             Ok("Set added".into())
         } else {
             Err("No ongoing workout".into())
@@ -146,7 +146,7 @@ impl WorkoutHistory {
                 if argv.len() < 1 {
                     Err("A name is required".into())
                 } else {
-                    w.begin_exercise(String::from(&argv[1]))
+                    w.begin_exercise(String::from(&argv[0]))
                 }
             },
             None => {
@@ -163,7 +163,7 @@ impl WorkoutHistory {
         if argv.len() < 1 {
             return Err("Missing muscle group argument".into());
         }
-        self.begin_workout(argv[1].to_string())?;
+        self.begin_workout(argv[0].to_string())?;
         return Ok("Workout started".into())
     }
     fn streak_command(&self, _argv: &[String]) -> Result<String, Box<dyn Error>> {
@@ -203,14 +203,15 @@ impl WorkoutHistory {
             return Err("Function requires at least a command".into());
         }
         let command = &argv[0];
+        let args = &argv[1..];
 
         let res = match command.as_str() {
-            "streak" => self.streak_command(argv),
+            "streak" => self.streak_command(args),
             "streak-status" => Err(format!("{}: NOT IMPLEMENTED",command).into()),
-            "enter-set" => self.enter_set_command(argv),
-            "begin-exericse" => self.begin_exercise_command(argv),
-            "end-workout" => self.end_workout_command(argv),
-            "begin-workout" => self.begin_workout_command(argv),
+            "enter-set" => self.enter_set_command(args),
+            "begin-exercise" => self.begin_exercise_command(args),
+            "end-workout" => self.end_workout_command(args),
+            "begin-workout" => self.begin_workout_command(args),
             _ => return Err(format!("{}: no such command", command).into())
         };
 
