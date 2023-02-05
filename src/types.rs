@@ -10,19 +10,11 @@ use shell_words;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WorkoutHistory {
     workouts: Vec<Workout>,
-    ongoing_workout: Option<Workout>,
-    #[serde(default = "WorkoutHistory::default_value")]
-    missing: String
-}
-impl WorkoutHistory {
-    fn default_value() -> String {
-        "DEFAULT VALUE".to_string()
-    }
+    ongoing_workout: Option<Workout>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WorkoutInfo {
-    // date: String, // TODO Use actual datetime structure
     date: chrono::DateTime<chrono::Local>,
     main_group: String,
 }
@@ -50,11 +42,6 @@ pub struct Exercise {
     info: ExerciseInfo,
     sets: Vec<ExerciseSet>
 }
-// pub fn streak_date_1(dt: chrono::Local)  {
-//     let d = dt.date_naive();
-//     println!("Date {:?} becomes naive date {:?}", dt,d);
-// 
-// }
 
 pub fn cutoff_time() -> Result<chrono::NaiveTime, Box<dyn Error>> {
     return chrono::NaiveTime::from_hms_opt(3,3,3)
@@ -229,33 +216,6 @@ impl WorkoutHistory {
     }
 }
 
-
-fn generate_sample_workout_history() -> WorkoutHistory {
-    let mut wh = WorkoutHistory {
-        workouts : Vec::<Workout>::new(),
-        ongoing_workout: None,
-        missing: "MISSING VALUE".to_string()
-    };
-    let mut today = Workout {
-        info: WorkoutInfo { date: chrono::Local::now(), main_group: String::from("shoulders") },
-        exercises : Vec::<Exercise>::new()
-    };
-    let mut ohp: Exercise = Exercise {
-        info: ExerciseInfo { name : String::from("overhead press"), group: String::from("shoulders")},
-        sets: Vec::<ExerciseSet>::new()
-    };
-    ohp.sets.push(ExerciseSet{ weight: 0.0, reps: 12});
-    ohp.sets.push(ExerciseSet{ weight: 5.0, reps: 12});
-    ohp.sets.push(ExerciseSet{ weight: 5.0, reps: 12});
-    ohp.sets.push(ExerciseSet{ weight: 5.0, reps: 12});
-    // println!("{:?}", ohp);
-    today.exercises.push(ohp);
-    wh.workouts.push(today);
-    // println!("{:?}", wh);
-
-    return wh;
-}
-
 pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
     let mut rl = Editor::<()>::new()?;
     if rl.load_history("history.txt").is_err() {
@@ -389,23 +349,4 @@ pub fn get_workout_data() -> Result<WorkoutHistory, Box<dyn Error>> {
     let f = open_workout_file()?;
     let d = ::serde_json::from_reader(f)?;
     Ok(d)
-}
-
-pub fn test_workout_stuff() -> Result<(),Box<dyn Error>>{
-    let wh = generate_sample_workout_history();
-    let mut today = Workout {
-        info: WorkoutInfo { date: chrono::Local::now(), main_group: String::from("shoulders") },
-        exercises : Vec::<Exercise>::new()
-    };
-
-    today.begin_exercise(String::from("bench_press"))?;
-    today.enter_set(10.0, 12)?;
-    today.enter_set(15.0, 12)?;
-    today.begin_exercise(String::from("squat"))?;
-    today.enter_set(35.0, 15)?;
-    println!("today's workout: {:#?}", today);
-
-    let f = File::create("data.json")?;
-    ::serde_json::to_writer_pretty(&f, &wh)?;
-    Ok(())
 }
