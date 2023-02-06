@@ -305,48 +305,16 @@ fn get_workout_filename() -> core::result::Result<std::path::PathBuf, Box<dyn Er
     }
 }
 
-/*
- * std::fs::File::open(name) opens a file in read only mode and
- * std::fs::File::create(name) opens a file in write only mode and truncates
- * the file.  I thought of having a get_workout_file(write: bool) but
- * then the function calls get_workout_file(true) and get_workout_file(false)
- * look kind of silly.  Now I have these two functions that are almost
- * identical which also looks silly but this way is clearer.
- */
 fn open_workout_file() -> Result<File, Box<dyn Error>> {
-    match get_workout_filename() {
-        Ok(filename) => {
-            match std::fs::File::open(filename) {
-                Ok(file) => {
-                    Ok(file)
-                },
-                Err(_e) => {
-                    return Err("Could not open workout file".into());
-                }
-            }
-        },
-        Err(e) => {
-            Err(e)
-        }
-    }
+    let f = get_workout_filename()?;
+    std::fs::File::open(f)
+        .map_err(|e| format!("Could not open file for reading: {}", e).into())
 }
 
 fn create_workout_file() -> Result<File, Box<dyn Error>> {
-    match get_workout_filename() {
-        Ok(filename) => {
-            match std::fs::File::create(filename) {
-                Ok(file) => {
-                    Ok(file)
-                },
-                Err(_e) => {
-                    return Err("Could not open workout file".into());
-                }
-            }
-        },
-        Err(e) => {
-            Err(e)
-        }
-    }
+    let f = get_workout_filename()?;
+    std::fs::File::create(f)
+        .map_err(|e| format!("Could not open file for writing: {}", e).into())
 }
 
 pub fn get_workout_data() -> Result<WorkoutHistory, Box<dyn Error>> {
