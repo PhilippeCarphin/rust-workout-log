@@ -7,6 +7,18 @@ use dirs;
 use std::error::Error;
 use shell_words;
 use sscanf;
+use strum_macros;
+
+#[derive(strum_macros::Display, strum_macros::EnumString, strum_macros::IntoStaticStr)]
+pub enum MuscleGroup {
+    Shoulders,
+    Biceps,
+    Triceps,
+    Chest,
+    Back,
+    Abs,
+    Legs
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WorkoutHistory {
@@ -262,6 +274,18 @@ impl WorkoutHistory {
         }
 
         Ok(maxk.to_string())
+    }
+    /*
+     * The goal is to experiment with converting enums to and from strings.
+     */
+    pub fn _most_recent(&self, g: MuscleGroup) -> Result<&Workout, Box<dyn Error>> {
+        let gn : &'static str = g.into();
+        for w in self.workouts.iter().rev() {
+            if w.info.main_group == gn {
+                return Ok(w)
+            }
+        }
+        Err("No workout for group".into())
     }
 }
 
