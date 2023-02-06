@@ -239,8 +239,9 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
                 }
                 rl.add_history_entry(line.as_str());
                 let argv = shell_words::split(line.as_str())?;
-                if let Err(e) = wh.handle_command(&argv) {
-                    println!("\x1b[1;31mERROR\x1b[0m: {}", e);
+                match wh.handle_command(&argv) {
+                    Ok(resp) => println!("{}", resp),
+                    Err(e) => println!("\x1b[1;31mERROR\x1b[0m: {}", e)
                 }
                 rl.save_history("history.txt")?;
                 if wh.save().is_err() {
@@ -248,8 +249,6 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
                 }
                 if let Some(ow) = &wh.ongoing_workout {
                     print_workout(ow);
-                } else {
-                    print_workout_history(&wh);
                 }
             },
             Err(rustyline::error::ReadlineError::Interrupted) => {
