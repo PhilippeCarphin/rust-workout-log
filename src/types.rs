@@ -86,7 +86,6 @@ impl WorkoutHistory {
             let diff = prev.signed_duration_since(cur);
             match diff.num_days() {
                 i64::MIN..=-1 => {
-                    // println!("ERROR: Workouts out of order in database");
                     return Err("Workouts are out of order, cannot reliably calculate streak".into());
                 },
                 0 => {
@@ -96,7 +95,6 @@ impl WorkoutHistory {
                     n += 1;
                 },
                 2..=i64::MAX => {
-                    // println!("Streak ends at {} since the previous workout is on {}", prev, cur);
                     return Ok(n);
                 }
             }
