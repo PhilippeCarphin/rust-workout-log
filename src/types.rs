@@ -164,6 +164,10 @@ impl WorkoutHistory {
             Err(e) => Err(e)
         }
     }
+    fn print_command(&self, _argv: &[String]) -> Result<String, Box<dyn Error>> {
+        print_workout_history(&self);
+        Ok("".to_string())
+    }
 }
 
 impl Workout {
@@ -204,6 +208,7 @@ impl WorkoutHistory {
             "begin-exercise" => self.begin_exercise_command(args),
             "end-workout" => self.end_workout_command(args),
             "begin-workout" => self.begin_workout_command(args),
+            "print" => self.print_command(args),
             _ => return Err(format!("{}: no such command", command).into())
         };
 
