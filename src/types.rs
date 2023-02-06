@@ -209,6 +209,7 @@ impl WorkoutHistory {
             "end-workout" => self.end_workout_command(args),
             "begin-workout" => self.begin_workout_command(args),
             "print" => self.print_command(args),
+            "least-recent" => self.least_recent_group(),
             _ => return Err(format!("{}: no such command", command).into())
         };
 
@@ -223,6 +224,44 @@ impl WorkoutHistory {
             ::serde_json::to_writer_pretty(file, self)?;
         }
         Ok(())
+    }
+    /*
+     * It could potentially be easier to iterate over muscle groups
+     * and for each group, find its most recent workout and of these
+     * most recent workouts, return the muscle whose most recent workout
+     * was the longest time ago.  However this would require a list of
+     * muscle groups.
+     */
+    pub fn least_recent_group(&self) -> Result<String, Box<dyn Error>> {
+        /*
+         * Create a map with muscle groups as key and how many workouts
+         * ago the most recent workout for that group was
+         */
+        let mut m = std::collections::HashMap::new();
+        let mut n: i32 = 0;
+        for w in self.workouts.iter().rev() {
+            n += 1;
+            let key = w.info.main_group.clone();
+            if m.contains_key(&key) {
+                continue
+            }
+            m.insert(key, n);
+        }
+
+        /*
+         * The muscle group whose most recent workout was the most workouts
+         * ago is the least recently worked muscle group.
+         */
+        let mut max : i32 = i32::MIN;
+        let mut maxk : String = "unknown".to_string();
+        for (k,v) in m.iter() {
+            if max < *v {
+                max = *v;
+                maxk = k.to_string();
+            }
+        }
+
+        Ok(maxk.to_string())
     }
 }
 
