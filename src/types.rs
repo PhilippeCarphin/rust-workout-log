@@ -272,7 +272,7 @@ pub fn print_workout(w : & Workout) {
     for e in &w.exercises {
         print!("    {}: ", e.info.name);
         for s in &e.sets {
-            print!("{}x{}; ", s.weight, s.reps);
+            print!("{:.2}x{}; ", s.weight, s.reps);
         }
         print!("\n");
     }
