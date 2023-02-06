@@ -11,8 +11,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     if args.len() == 1 {
         repl(&mut wh)?;
     } else {
-        wh.handle_command(&args[1..])?;
-        print_workout_history(&wh);
+        match wh.handle_command(&args[1..]) {
+            Ok(resp) => println!("{}", resp),
+            Err(e) => return Err(e)
+        };
     }
     Ok(())
 }
