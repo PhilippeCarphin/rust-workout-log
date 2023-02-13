@@ -15,6 +15,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Ok(resp) => println!("{}", resp),
             Err(e) => return Err(e)
         };
+        wh.save()?
     }
     Ok(())
 }
