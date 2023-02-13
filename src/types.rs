@@ -107,6 +107,7 @@ impl WorkoutHistory {
                     n += 1;
                 },
                 2..=i64::MAX => {
+                    println!("diff {diff} is larger or equal to 2 days, streak is ended");
                     return Ok(n);
                 }
             }
@@ -336,7 +337,10 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
 }
 
 pub fn print_workout(w : & Workout) {
-    println!("{} workout done on {}", w.info.main_group, w.info.date);
+    let date = w.info.date.date_naive();
+    let sd = streak_date(w.info.date).unwrap();
+    println!("\x1b[1;38;5;208m{}\x1b[0m workout started on \x1b[1;32m{}\x1b[0m \x1b[32m{}\x1b[0m (streak date = \x1b[1;33m{}\x1b[0m ({}))",
+    w.info.main_group, date, w.info.date.format("%H:%M"), sd, sd.format("%A"));
     for e in &w.exercises {
         print!("    {}: ", e.info.name);
         for s in &e.sets {
