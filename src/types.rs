@@ -67,8 +67,8 @@ pub fn cutoff_time() -> Result<chrono::NaiveTime, Box<dyn Error>> {
  */
 pub fn streak_date(dt: chrono::DateTime<chrono::Local>) -> Result<chrono::NaiveDate, Box<dyn Error>> {
     if dt.time() < cutoff_time()? {
-        return dt.date_naive().checked_sub_days(chrono::Days::new(1))
-            .ok_or("Could not subtract one day when computing streak date".into())
+        dt.date_naive().checked_sub_days(chrono::Days::new(1))
+            .ok_or("{line!()}: Could not subtract one day when computing streak date".into())
     } else {
         Ok(dt.date_naive())
     }
@@ -93,6 +93,7 @@ impl WorkoutHistory {
         let mut n : i32 = 0;
 
         let mut prev = start_date.unwrap_or(tomorrow()?);
+        let mut shameful_bool_first = true;
         for w in self.workouts.iter().rev() {
             let cur = streak_date(w.info.date)?;
             let diff = prev.signed_duration_since(cur);
@@ -101,16 +102,23 @@ impl WorkoutHistory {
                     return Err("Workouts are out of order, cannot reliably calculate streak".into());
                 },
                 0 => {
+                    println!("Same day workouts on, not adding to streak");
+                    println!("{} workout on same day as previous workout, not adding to streak", w.info.main_group);
                     continue;
                 },
                 1 => {
                     n += 1;
                 },
                 2..=i64::MAX => {
-                    println!("diff {diff} is larger or equal to 2 days, streak is ended");
-                    return Ok(n);
+                    if shameful_bool_first {
+                        println!("No workout done on current day but shameful_bool_first is true so streak calculation continues");
+                    } else {
+                        println!("diff {diff} is larger or equal to 2 days, streak is ended");
+                        return Ok(n);
+                    }
                 }
             }
+            shameful_bool_first = false;
             prev = cur;
         }
         Ok(n)
@@ -178,10 +186,39 @@ impl WorkoutHistory {
         }
     }
     fn print_command(&self, _argv: &[String]) -> Result<String, Box<dyn Error>> {
-        print_workout_history(&self);
+        if let Some(n_str) = _argv.get(0) {
+            print_workout_history(&self, n_str.parse::<usize>().ok());
+        } else {
+            print_workout_history(&self, None);
+        }
+        Ok("".to_string())
+    }
+    fn kg_command(&self, _argv: &[String]) -> Result<String, Box<dyn Error>> {
+        let mut resp : String = String::new();
+        for kg in [2,4,6,8,10,12,14,16,18,20] {
+            let lbs = 2.20 * (kg as f64);
+            let s = format!("{kg}kg = {lbs:.2}lbs\n");
+            resp += s.as_str();
+        }
+        Ok(resp)
+    }
+    fn resume_workout_command(&mut self, _argv: &[String]) -> Result<String, Box<dyn Error>> {
+        if self.ongoing_workout.is_some() {
+            return Err("There is already an ongoing workout".into());
+        }
+        self.ongoing_workout = self.workouts.pop();
+        Ok("Workout resumed".to_string())
+    }
+    fn csv_command(&self, _argv: &[String]) -> Result<String, Box<dyn Error>> {
+        if let Some(n_str) = _argv.get(0) {
+            print_workout_history_csv(&self, Some(n_str.parse::<usize>()?));
+        } else {
+            print_workout_history_csv(&self, None);
+        }
         Ok("".to_string())
     }
 }
+
 
 impl Workout {
     fn begin_exercise(&mut self, name: String) -> Result<String, Box<dyn Error>> {
@@ -223,6 +260,9 @@ impl WorkoutHistory {
             "begin-workout" => self.begin_workout_command(args),
             "print" => self.print_command(args),
             "least-recent" => self.least_recent_group(),
+            "kg" => self.kg_command(args),
+            "resume-workout" => self.resume_workout_command(args),
+            "csv" => self.csv_command(args),
             _ => return Err(format!("{}: no such command", command).into())
         };
 
@@ -315,6 +355,7 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
                     println!("\x1b[1;31ERROR\x1b[0m Failed to save file");
                 }
                 if let Some(ow) = &wh.ongoing_workout {
+                    println!("=========== Ongoing workout ============");
                     print_workout(ow);
                 }
             },
@@ -331,7 +372,7 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
             }
         }
     }
-    print_workout_history(&wh);
+    print_workout_history(&wh, None);
 
     Ok(())
 }
@@ -339,8 +380,10 @@ pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
 pub fn print_workout(w : & Workout) {
     let date = w.info.date.date_naive();
     let sd = streak_date(w.info.date).unwrap();
-    println!("\x1b[1;38;5;208m{}\x1b[0m workout started on \x1b[1;32m{}\x1b[0m \x1b[32m{}\x1b[0m (streak date = \x1b[1;33m{}\x1b[0m ({}))",
-    w.info.main_group, date, w.info.date.format("%H:%M"), sd, sd.format("%A"));
+    print!("\x1b[1;38;5;208m{}\x1b[0m workout started on \x1b[1;32m{}\x1b[0m ",
+    w.info.main_group, date);
+    println!("\x1b[32m{}\x1b[0m (streak date = \x1b[1;33m{}\x1b[0m ({}))",
+    w.info.date.format("%H:%M"), sd, sd.format("%A"));
     for e in &w.exercises {
         print!("    {}: ", e.info.name);
         for s in &e.sets {
@@ -349,8 +392,31 @@ pub fn print_workout(w : & Workout) {
         print!("\n");
     }
 }
+pub fn print_workout_history_csv(wh: &WorkoutHistory, n: Option<usize>){
+    println!("Group,Date,Exercise,Sets");
+    let start = match n {
+        Some(n) => wh.workouts.len() - n,
+        None => 0
+    };
+    for w in &wh.workouts[start..] {
+        print_workout_csv(w);
+    }
+}
+pub fn print_workout_csv(w: &Workout) {
+    let sd = streak_date(w.info.date).unwrap();
+    println!("{},{sd}",w.info.main_group);
+    for e in &w.exercises {
+        print!(",,{},",e.info.name);
+        for s in &e.sets {
+            print!("{:.2}x{}; ",s.weight,s.reps);
+        }
+        print!("\n");
+    }
+}
 
-pub fn print_workout_history(wh: &WorkoutHistory) {
+
+
+pub fn print_workout_history(wh: &WorkoutHistory, n: Option<usize>) {
     match &wh.ongoing_workout {
         Some(w) => {
             println!("======= Ongoing workout =======");
@@ -358,8 +424,19 @@ pub fn print_workout_history(wh: &WorkoutHistory) {
         }
         None => {println!("No ongoing workout");}
     }
-    println!("======= Complete history =======");
-    for w in &wh.workouts {
+
+    let start = match n {
+        Some(n) => {
+            println!("=========== Last {n} workouts =======");
+            wh.workouts.len() - n
+        },
+        None => {
+
+            println!("======= Complete history =======");
+            0
+        }
+    };
+    for w in &wh.workouts[start..] {
         print_workout(w);
     }
 }

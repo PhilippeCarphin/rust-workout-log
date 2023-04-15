@@ -1,10 +1,21 @@
 # Rust workout log
 
-This is a program that I'm learning Rust with.  As of now, it reads a workout
-history from a JSON file.
+This is a workout tracking application that I made to help workout regularly.
 
-A workout consists of multiple exercises and an exercise consists of multiple
-sets where a set is a weight and a number of reps.
+I use Duolingo and it has the concept of a "streak" which once your streak
+reaches about 5, the idea of missing a day and having it come back down to zero
+becomes unthinkable.
+
+The reasons for writing my own app which is pretty crappy compared to other
+actual apps is to use my passion for programming to get me more excited about
+working out.
+
+# Data
+
+A workout is a vector of exercises, an exercise is a vector of sets, and a set
+is a weight and a number of reps.  This fails to represent things like timed
+exercises like doing a plank and other types of exercises but covers most
+gym style exercises.
 
 As an example, a shoulder workout might be
 - Overhead press: 15x10, 20x8, 25x3
