@@ -48,6 +48,7 @@ pub struct ExerciseInfo {
 pub struct ExerciseSet {
     weight: f64,
     reps: u8,
+    note: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -147,7 +148,12 @@ impl WorkoutHistory {
             } else {
                 argv[0].parse::<f64>()?
             };
-            w.enter_set(weight, argv[1].parse::<u8>()?)?;
+            let note = if argv[2..].len() == 0 {
+                None
+            } else {
+                Some(argv[2..].join(" "))
+            };
+            w.enter_set(weight, argv[1].parse::<u8>()?, note)?;
             Ok("Set added".into())
         } else {
             Err("No ongoing workout".into())
@@ -230,11 +236,11 @@ impl Workout {
         );
         return Ok("Exercise started".to_string())
     }
-    fn enter_set(&mut self, weight: f64, reps: u8) -> Result<(), Box<dyn Error>> {
+    fn enter_set(&mut self, weight: f64, reps: u8, note: Option<String>) -> Result<(), Box<dyn Error>> {
         let result = self.exercises.last_mut();
         match result {
             Some(cur) => {
-                let set = ExerciseSet{ weight, reps};
+                let set = ExerciseSet{ weight, reps, note};
                 cur.sets.push(set);
                 Ok(())
             }
@@ -385,11 +391,18 @@ pub fn print_workout(w : & Workout) {
     println!("\x1b[32m{}\x1b[0m (streak date = \x1b[1;33m{}\x1b[0m ({}))",
     w.info.date.format("%H:%M"), sd, sd.format("%A"));
     for e in &w.exercises {
-        print!("    {}: ", e.info.name);
+        print!("    \x1b[1m{}\x1b[0m: ", e.info.name);
         for s in &e.sets {
             print!("{:.2}x{}; ", s.weight, s.reps);
         }
         print!("\n");
+        let mut i = 0;
+        for s in &e.sets {
+            i += 1;
+            if let Some(n) = &s.note {
+                println!("       - set({}): {}", i, n);
+            }
+        }
     }
 }
 pub fn print_workout_history_csv(wh: &WorkoutHistory, n: Option<usize>){
