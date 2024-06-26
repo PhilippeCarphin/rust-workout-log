@@ -370,7 +370,12 @@ impl WorkoutHistory {
 
 pub fn repl(wh: &mut WorkoutHistory) -> Result<(), Box<dyn Error>> {
     let mut rl = Editor::<()>::new()?;
-    if rl.load_history("history.txt").is_err() {
+    let history_file = if let Some(d) = dirs::home_dir(){
+        d.join(".workout_history")
+    } else {
+        return Err("Could not get home directory".into())
+    };
+    if rl.load_history(&history_file).is_err() {
         println!("No history");
     }
     // TODO: Set beginning prompt based on workout history
