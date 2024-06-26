@@ -125,6 +125,9 @@ impl WorkoutHistory {
         Ok(n)
     }
     fn begin_workout(&mut self, main_group: String) -> Result<(), Box<dyn Error>> {
+        if self.ongoing_workout.is_some() {
+            return Err("There is an ongoing workout.  Use end-workout first".into())
+        }
         let d = chrono::Local::now();
         self.ongoing_workout = Some(Workout {
             info: WorkoutInfo {
