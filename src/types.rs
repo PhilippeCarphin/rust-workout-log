@@ -139,6 +139,15 @@ impl WorkoutHistory {
         Ok(())
     }
 
+    fn plates_to_weight_command(&mut self, argv: &[String]) -> Result<String, Box<dyn Error>> {
+
+        let plates = argv[0].parse::<f64>()?;
+        let weight = 45.0 + 2.0 * plates;
+        println!("{}", weight);
+
+        Ok("".into())
+    }
+
     fn enter_set_command(&mut self, argv: &[String] ) -> Result<String, Box<dyn Error>> {
         if let Some(w) = &mut self.ongoing_workout {
             if argv.len() < 2 {
@@ -272,6 +281,8 @@ impl WorkoutHistory {
             "kg" => self.kg_command(args),
             "resume-workout" => self.resume_workout_command(args),
             "csv" => self.csv_command(args),
+            "plates-to-weight" => self.plates_to_weight_command(args),
+            "help" => self.help_command(args),
             _ => return Err(format!("{}: no such command", command).into())
         };
 
@@ -280,6 +291,24 @@ impl WorkoutHistory {
         } else {
             return res
         }
+    }
+    pub fn help_command(&self, argv: &[String]) -> Result<String, Box<dyn Error>> {
+        if argv.len() == 0 {
+            println!("Commands:
+- streak: show streak
+- streak-status: Not implemented
+- enter-set WEIGHT[unit] REPS: Enter a set for the current exercise
+- begin-exercise NAME: Start a new exercise (ends the current exercise)
+- begin-workout GROUP: Start a workout
+- kg: Print kg to lbs conversions
+- print: Print complete history
+- least-recent: Prints the least recently worked group
+- resume-workout: Resume the last ended workout.
+- csv: Print workout log as CSV
+- help: Print help
+");
+        }
+        Ok("".into())
     }
     pub fn save(&self) -> Result<(),Box<dyn Error>> {
         if let Ok(file) = create_workout_file() {
